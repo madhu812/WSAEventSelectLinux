@@ -1,1 +1,1 @@
-# Socket_Code
+The function WSAEventSelect/WSAAsyncSelect are windows specifc and incases where applications are migrated from windows to linux need these api functionality can use this code from WSAEventSelectLinux(). The main moto of these functions is to provide a continuous monitor to check for any incoming connections or any read, write,close operations on a socket in asynchronous fashion making the main thread to continue without blocking for any activity.
