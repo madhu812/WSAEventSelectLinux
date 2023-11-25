@@ -59,7 +59,8 @@ bool WSA::WSAEventAccept(SOCKET sockFd, void * objPtr)
         if(event.events & EPOLLIN) 
         {
             // You can call accept() call as we got notified about incoming connections
-            Accept_Incoming();
+            Accept_Incoming();// if this function has accept() then the thread blocks until accepted
+            auto future = std::async(std::launch::async,Accept_Incoming);// this makes the thread non-blocking and accept() can be launched in new thread
         }
     }
     // END for(;;)--and you thought it would never end!
@@ -102,7 +103,7 @@ bool WSA::WSAEventRWX(SOCKET sockFd)
                 return false;
             }
             Read();// since we have registered for EPOLLIN and EPOLLOUT event, based on the received event u can call Read() & Write() functions
-           
+            auto future = std::async(std::launch::async,Read);// This launches Read in seperate thread
         }
 
     } // END for(;;)--and you thought it would never end!
