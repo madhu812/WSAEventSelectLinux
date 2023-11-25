@@ -2,7 +2,7 @@
 //
 //
 //
-//  Asynchronous Socket Functions for Incoming connections and Read,Write,Close events 
+//  Asynchronous Socket Functions for Incoming connections and Read,Write,Close events On Linux
 //
 //
 ///////////////////////////////////////////////////////////////////////////////////////
