@@ -19,3 +19,5 @@ Most of the cases it's the users control on how & when to write to a fd. but rea
 ##Function Description
 WSAEventSelectLinux(socketfd,type_of_flag_for_events),WSAEventSelectLinux(socketfd,event_Obj,type_of_flag_for_events)
 This function can take two types of flags, if you want to monitor for incoming connections then FD_ACCEPT flag is passed and for RWX(Read,Write,Close) events FD_READ_WRITE_CLOSE is passed.
+
+In the main() function the examples of usage are demonstrated for both server and client. new threads are spun for calling Listen and Connect functions, single thread can also launch these.

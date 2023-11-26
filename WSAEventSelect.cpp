@@ -17,6 +17,8 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <iostream>
+#include <thread>
 #include "WSAEventSelect.h"
 
 
@@ -27,6 +29,9 @@ typedef struct sockaddr SOCKADDR;
 #define SOCKET int
 int FD_ACCEPT = 2;
 int FD_READ_WRITE_CLOSE = 1;
+static struct sockaddr_in serv_addr;
+static int m_sockfd;
+static socklen_t addrlen;
 
 bool WSA::WSAEventAccept(SOCKET sockFd, void * objPtr)
 {
@@ -59,7 +64,8 @@ bool WSA::WSAEventAccept(SOCKET sockFd, void * objPtr)
         if(event.events & EPOLLIN) 
         {
             // You can call accept() call as we got notified about incoming connections
-            Accept_Incoming();// if this function has accept() then the thread blocks until accepted
+            //Accept_Incoming();// if this function has accept() then the thread blocks until accepted
+            printf("New incoming connection detected......\n");
             auto future = std::async(std::launch::async,Accept_Incoming);// this makes the thread non-blocking and accept() can be launched in new thread
         }
     }
@@ -123,22 +129,130 @@ bool WSA::WSAEventSelectLinux(SOCKET &sockFd, int &sockEvntFlag)
     }
     return true;
 }
-// Dummy functions for Read(),Write(),Close()
+
+bool WSA::Listen()
+{
+    
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons(8888);
+    addrlen = sizeof(serv_addr);
+    SOCKET sock_fd = socket( AF_INET, SOCK_STREAM, 0 );
+    m_sockfd=sock_fd;
+    if( sock_fd == INVALID_SOCKET )
+    {
+        perror("Failed to create TCP listening socket");
+        return false;
+    }
+    const int enable = 1;
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+    {
+        perror("setsockpot failed");
+    }
+        if( SOCKET_ERROR == bind( sock_fd, (SOCKADDR*)&serv_addr, sizeof( serv_addr ) ) )
+        {
+            if( errno != EADDRINUSE )
+            {
+                perror("Failed to bind TCP listening socket");
+                close( sock_fd );
+                return false;
+            }
+            else
+            {
+                perror("Failed to bind TCP listening socket,Check if Address is already in use");
+                close( sock_fd );
+                return false;
+            }
+        }
+    std::cout << " Server is Listening on port [" << 8888 << "] ThreadID:: [" << gettid() << "]" << std::endl;
+    if( SOCKET_ERROR == listen( sock_fd, 5 ) )
+    {
+        perror("Failed to start listening on TCP server socket");
+        close( sock_fd );
+        return false;
+    }
+    // invoking this function will make the main thread continue without blocking
+    // the new thread takes the responsibility of notifying incoming connections
+    if( this->WSAEventSelectLinux( sock_fd, FD_ACCEPT )  == false)
+    {
+        close( sock_fd );
+        return false;
+    }
+    return true;
+}
+
+void WSA::Accept_Incoming()
+{
+    int new_socket;
+    if ((new_socket
+        = accept(m_sockfd, (struct sockaddr*)&serv_addr, &addrlen))
+    < 0) {
+    perror("accept");
+    exit(EXIT_FAILURE);
+    }
+    std::cout << " New connection accepted......ThreadID:: [" << gettid() << "]" << std::endl;
+}
+
+bool WSA::Connect()
+{
+    SOCKET      sock_fd;
+    SOCKADDR_IN sAddr;
+    sAddr.sin_family = AF_INET;
+    sAddr.sin_port = htons(8888);
+    if (inet_pton(AF_INET, "0.0.0.0", &sAddr.sin_addr)<= 0) 
+    {
+    printf("\nInvalid address/ Address not supported \n");
+    return -1;
+    }
+    sock_fd = socket( PF_INET, SOCK_STREAM, 0 );
+    if( sock_fd == INVALID_SOCKET )
+    {
+        perror("Failed to create new socket.");
+        return false; 
+    }
+    std::cout << " Connecting to Remote host......ThreadID:: [" << gettid() << "]" << std::endl;
+    int retVal = connect( sock_fd, (struct sockaddr *)&sAddr, sizeof(sAddr) );
+
+    if( retVal == -1)
+    {
+        perror("Failed to connect to remote host.");
+        sock_fd = INVALID_SOCKET;
+        close( sock_fd );
+        return false;
+    }
+    else
+    {
+        // invoking this function will make the main thread continue without blocking
+        // the new thread takes the responsibility of notifying RWX operations
+        std::cout << " Successfully Connected to Remote Host.....ThreadID:: [" << gettid() << "]" << std::endl;
+        this->WSAEventSelectLinux(sock_fd,FD_READ_WRITE_CLOSE);
+    }
+    return true;
+}
+
+// Dummy functions for Read(),Close()
 //Have your own definitions as per requirement
 void WSA::Read(){}
-void WSA::Accept_Incoming(){}
 void WSA::Close(){}
 
 int main()
 {
-    ///usage:Refer Readme to completely understand the usage
-    WSA Wsa_Obj;
-    int Socket;// dummy socket variable
-    // invoking this function will make the main thread continue without blocking
-    // the new thread takes the responsibility of notifying incoming connections
-    Wsa_Obj.WSAEventSelectLinux( Socket, FD_ACCEPT );
-    // invoking this function will make the main thread continue without blocking
-    // the new thread takes the responsibility of notifying RWX operations
-    Wsa_Obj.WSAEventSelectLinux( Socket, FD_READ_WRITE_CLOSE );
-}
+    //Refer Readme to completely understand the usage
+    //of this library
+    WSA obj;
+    //Both server and client side comms are carried out here
+    // Create a thread for Listen()
+    std::thread listenThread([&obj]() {
+        obj.Listen();
+    });
 
+    // Create a thread for Connect()
+    std::thread connectThread([&obj]() {
+                obj.Connect();
+    });
+
+    // Wait for both threads to finish
+    listenThread.join();
+    connectThread.join();
+
+    
+}
